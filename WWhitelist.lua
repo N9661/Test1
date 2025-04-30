@@ -1,32 +1,76 @@
 local WhitelistSystem = {}
 
 -- Services
-local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
-local RbxAnalyticsService = game:GetService("RbxAnalyticsService")
 local RunService = game:GetService("RunService")
 
 -- Constants
-local ENCRYPTION_KEY = 42 -- Change this to something unique
 local VERIFICATION_INTERVAL = 30 -- Check every 30 seconds
 
--- Encryption function
-local function encrypt(str)
-    local result = ""
-    for i = 1, #str do
-        local char = string.byte(str, i)
-        result = result .. string.char(bit32.bxor(char, ENCRYPTION_KEY))
+-- Function to get HWID based on executor
+local function getHWID()
+    -- Try different executor-specific HWID functions
+    if syn and syn.request then
+        -- Synapse X
+        return syn.request({Url = "https://httpbin.org/get"}).Headers["Syn-Fingerprint"] or "Unknown"
+    elseif syn and syn.get_hwid then
+        return syn.get_hwid()
+    elseif Krnl and Krnl.GetHWID then
+        -- Krnl
+        return Krnl.GetHWID()
+    elseif identifyexecutor and gethwid then
+        -- Script-Ware and some others
+        return gethwid()
+    elseif getexecutorname and gethwid then
+        return gethwid()
+    elseif executor and executor.identifier then
+        -- Generic approach
+        return executor.identifier()
+    elseif fluxus and fluxus.get_hwid then
+        -- Fluxus
+        return fluxus.get_hwid()
+    elseif getexecutorname and getexecutorname():find("ScriptWare") and get_hwid then
+        -- Script-Ware alternative method
+        return get_hwid()
+    elseif oxygen_get_hwid then
+        -- Oxygen U
+        return oxygen_get_hwid()
+    elseif SENTINEL_HWID then
+        -- Sentinel
+        return SENTINEL_HWID
+    elseif SHADOW_HWID then
+        -- Shadow
+        return SHADOW_HWID
+    elseif KRNL_HWID then
+        -- Krnl alternative
+        return KRNL_HWID
+    else
+        -- Fallback: generate a pseudo-HWID based on available system info
+        local hwid = ""
+        pcall(function()
+            -- Try to get some unique device info
+            local screenSize = workspace.CurrentCamera.ViewportSize
+            local timeInfo = os.time() % 1000
+            hwid = game.JobId .. "-" .. screenSize.X .. "x" .. screenSize.Y .. "-" .. timeInfo
+        end)
+        return hwid ~= "" and hwid or "Unavailable"
     end
-    return result
 end
 
--- Hash function
-local function hash(str)
-    local h = 5381
-    for i = 1, #str do
-        h = bit32.bxor(h * 33 + string.byte(str, i), 0)
+-- Function to get ClientID
+local function getClientID()
+    -- Try different methods to get ClientID
+    if game:GetService("RbxAnalyticsService") then
+        local success, clientId = pcall(function()
+            return game:GetService("RbxAnalyticsService"):GetClientId()
+        end)
+        if success and clientId then
+            return clientId
+        end
     end
-    return tostring(h)
+    
+    -- Fallback: generate a pseudo-ClientID
+    return "Generated-" .. string.format("%x", os.time() + math.random(1000000, 9999999))
 end
 
 -- Get player identifiers
@@ -39,42 +83,36 @@ function WhitelistSystem:GetIdentifiers()
     -- Get the basic identifiers
     local userId = player.UserId
     local username = player.Name
-    local hwid = RbxAnalyticsService:GetClientId() -- This is the HWID
-    local clientId = HttpService:GenerateGUID(false) -- Session ID
-    
-    -- Create a verification hash
-    local verificationString = userId .. "|" .. username .. "|" .. hwid
-    local verificationHash = hash(verificationString)
+    local hwid = getHWID()
+    local clientId = getClientID()
     
     return {
         UserID = userId,
         Username = username,
         HWID = hwid,
-        ClientID = clientId,
-        VerificationHash = verificationHash
+        ClientID = clientId
     }
 end
 
--- Whitelist data
 WhitelistSystem.Whitelist = {
     -- UserIDs
     UserIDs = {
-        -- [12345678] = true,
+        [8367759083] = true,
     },
     
     -- Usernames
     Usernames = {
-        -- ["ExampleUser"] = true,
+        ["HVX_Havoc"] = true,
     },
     
     -- HWIDs
     HWIDs = {
-        -- ["example-hwid-string"] = true,
+      ["e9b170f70b95881d19abdb753e64d6513e354bc72e37c7d45b13b1f36ec3aa60"] = true,
     },
     
-    -- Verification hashes (most secure)
-    VerificationHashes = {
-        -- ["hash-value"] = true,
+    -- ClientIDs
+    ClientIDs = {
+        ["fba078e1-e7a1-4082-ad2d-877b7094797b"] = true,
     }
 }
 
@@ -83,11 +121,6 @@ function WhitelistSystem:IsWhitelisted()
     local identifiers, error = self:GetIdentifiers()
     if not identifiers then
         return false, "Failed to get identifiers: " .. (error or "Unknown error")
-    end
-    
-    -- Check verification hash first (most secure)
-    if self.Whitelist.VerificationHashes[identifiers.VerificationHash] then
-        return true, "Verification Hash", identifiers
     end
     
     -- Check UserID
@@ -105,26 +138,12 @@ function WhitelistSystem:IsWhitelisted()
         return true, "HWID", identifiers
     end
     
-    return false, "Not Whitelisted", identifiers
-end
-
--- Add a user to the whitelist
-function WhitelistSystem:AddToWhitelist(userId, username, hwid)
-    if not userId or not username or not hwid then
-        return false, "UserID, Username, and HWID are all required"
+    -- Check ClientID
+    if self.Whitelist.ClientIDs[identifiers.ClientID] then
+        return true, "ClientID", identifiers
     end
     
-    -- Add to individual lists
-    self.Whitelist.UserIDs[userId] = true
-    self.Whitelist.Usernames[username] = true
-    self.Whitelist.HWIDs[hwid] = true
-    
-    -- Create and add verification hash
-    local verificationString = userId .. "|" .. username .. "|" .. hwid
-    local verificationHash = hash(verificationString)
-    self.Whitelist.VerificationHashes[verificationHash] = true
-    
-    return true, verificationHash
+    return false, "Not Whitelisted", identifiers
 end
 
 -- Start continuous verification to detect runtime tampering
@@ -142,10 +161,9 @@ function WhitelistSystem:StartContinuousVerification()
         local currentIdentifiers = self:GetIdentifiers()
         
         -- Check for critical changes that shouldn't happen during gameplay
-        if currentIdentifiers.UserID ~= self.initialIdentifiers.UserID or
-           currentIdentifiers.HWID ~= self.initialIdentifiers.HWID then
+        if currentIdentifiers.UserID ~= self.initialIdentifiers.UserID then
             -- Critical tampering detected - kick the player
-            self:HandleTampering("Identity change detected during session")
+            self:HandleTampering("UserID change detected during session")
         end
         
         -- Check if still whitelisted
@@ -189,16 +207,8 @@ function WhitelistSystem:Cleanup()
     end
 end
 
--- Initialize the whitelist system with your whitelist data
+-- Initialize the whitelist system
 function WhitelistSystem:Initialize()
-    -- Add your whitelisted users here
-    -- Format: self:AddToWhitelist(userId, username, hwid)
-    
-    -- Example users (replace with your actual whitelist)
-    self:AddToWhitelist(123456789, "User1", "HWID1")
-    self:AddToWhitelist(987654321, "User2", "HWID2")
-    self:AddToWhitelist(111222333, "User3", "HWID3")
-    
     -- Start continuous verification
     self:StartContinuousVerification()
     
