@@ -7,7 +7,7 @@ local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercon
 getgenv().Library = Library
 
 -- Load our whitelist system
-local WhitelistSystem = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/N9661/Test1/refs/heads/main/Whitelist.lua"))():Initialize()
+local WhitelistSystem = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/N9661/Test1/refs/heads/main/WWhitelist.lua"))():Initialize()
 
 -- Check if player is whitelisted
 local isWhitelisted, whitelistMethod, identifiers = WhitelistSystem:IsWhitelisted()
