@@ -6,12 +6,28 @@ local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercon
 -- Make Library accessible globally for notifications
 getgenv().Library = Library
 
--- Load our whitelist system
-local WhitelistSystem = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/N9661/Test1/refs/heads/main/WWWhitelist.lua"))():Initialize()
+-- Load our whitelist system with error handling
+local success, WhitelistSystem = pcall(function()
+    return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/N9661/Test1/refs/heads/main/WWWhitelist.lua"))():Initialize()
+end)
+
+if not success or not WhitelistSystem then
+    -- Failed to load whitelist system
+    Library:Notify{
+        Title = "Error",
+        Content = "Failed to load whitelist system",
+        SubContent = "Please check if the URL is correct and accessible",
+        Duration = 5
+    }
+    
+    -- Wait a bit before kicking to show the notification
+    task.wait(5)
+    game.Players.LocalPlayer:Kick("Failed to load whitelist system. Contact the developer.")
+    return
+end
 
 -- Check if player is whitelisted
 local isWhitelisted, whitelistMethod, identifiers = WhitelistSystem:IsWhitelisted()
-
 if not isWhitelisted then
     -- Not whitelisted, show error and kick
     Library:Notify{
@@ -61,17 +77,17 @@ local Options = Library.Options
 -- Add security information to the Security tab
 Tabs.Security:CreateParagraph("SecurityInfo", {
     Title = "Security Information",
-    Content = "Authentication Method: " .. whitelistMethod,
+    Content = "Authentication Method: " .. tostring(whitelistMethod),
     TitleAlignment = "Middle",
     ContentAlignment = Enum.TextXAlignment.Center
 })
 
 Tabs.Security:CreateParagraph("UserInfo", {
     Title = "User Information",
-    Content = "Username: " .. identifiers.Username .. 
-              "\nUserID: " .. identifiers.UserID .. 
-              "\nHWID: " .. string.sub(identifiers.HWID, 1, 8) .. "..." .. 
-              "\nSession ID: " .. string.sub(identifiers.ClientID, 1, 8) .. "..."
+    Content = "Username: " .. identifiers.Username ..
+               "\nUserID: " .. tostring(identifiers.UserID) ..
+               "\nHWID: " .. string.sub(tostring(identifiers.HWID), 1, 8) .. "..." ..
+               "\nSession ID: " .. string.sub(tostring(identifiers.ClientID), 1, 8) .. "..."
 })
 
 -- Welcome notification
@@ -101,5 +117,7 @@ SaveManager:LoadAutoloadConfig()
 
 -- Clean up when the script is unloaded
 game:GetService("Players").LocalPlayer.OnTeleport:Connect(function()
-    WhitelistSystem:Cleanup()
+    if WhitelistSystem and type(WhitelistSystem.Cleanup) == "function" then
+        WhitelistSystem:Cleanup()
+    end
 end)
