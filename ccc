@@ -1,0 +1,110 @@
+-- Create a table to store all identifiers
+local identifiers = {}
+
+-- Safe function to get HWID (using the method that worked for you)
+local function safeGetHWID()
+    -- Try different methods to get HWID
+    if getexecutorhwid then
+        return getexecutorhwid()
+    elseif get_hwid then
+        return get_hwid()
+    elseif gethwid then
+        return gethwid()
+    elseif Executor and Executor.HWID then
+        return Executor.HWID
+    elseif syn and syn.hwid then
+        return syn.hwid()
+    else
+        -- Create a pseudo-HWID if no function is available
+        local computerName = getcomputername and getcomputername() or "Unknown"
+        local userName = getusername and getusername() or "Unknown"
+        return string.format("Delta_%s_%s", computerName, userName)
+    end
+end
+
+-- Safe function to call any function that might not exist
+local function safeCall(func, ...)
+    if type(func) == "function" then
+        return func(...)
+    else
+        return "Unavailable"
+    end
+end
+
+-- 1. Basic Identifiers
+identifiers.HWID = safeGetHWID()
+identifiers.ClientID = game:GetService("RbxAnalyticsService"):GetClientId()
+identifiers.UserID = game:GetService("Players").LocalPlayer.UserId
+
+-- 2. Player Information
+identifiers.PlayerName = game:GetService("Players").LocalPlayer.Name
+identifiers.DisplayName = game:GetService("Players").LocalPlayer.DisplayName
+identifiers.AccountAge = game:GetService("Players").LocalPlayer.AccountAge
+
+-- 3. Device Information
+identifiers.DeviceID = safeCall(identifyexecutor) or "Unknown"
+identifiers.ComputerName = safeCall(getcomputername) or "Unknown"
+identifiers.UserName = safeCall(getusername) or "Unknown"
+
+-- 4. Game Information
+identifiers.PlaceID = game.PlaceId
+identifiers.GameID = game.GameId
+identifiers.JobID = game.JobId
+
+-- 5. IP-Related (if available)
+identifiers.IP = safeCall(getip) or "Unavailable"
+identifiers.IPv4 = safeCall(getipv4) or "Unavailable"
+
+-- 6. Executor-Specific
+identifiers.ExecutorVersion = safeCall(getexecutorversion) or "Unavailable"
+identifiers.ExecutorName = safeCall(getexecutorname) or identifiers.DeviceID
+
+-- 7. Hardware-Specific
+identifiers.HardwareID = safeCall(gethardwareid) or "Unavailable"
+identifiers.DiskID = safeCall(getdiskid) or "Unavailable"
+identifiers.CPUID = safeCall(getcpuid) or "Unavailable"
+identifiers.GPUID = safeCall(getgpuid) or "Unavailable"
+identifiers.RAMID = safeCall(getramid) or "Unavailable"
+identifiers.BIOSID = safeCall(getbiosid) or "Unavailable"
+identifiers.MBID = safeCall(getmotherboardid) or "Unavailable"
+
+-- 8. Delta-Specific
+if type(Delta) == "table" then
+    identifiers.DeltaID = Delta.ID or "Unavailable"
+    identifiers.DeltaVersion = Delta.Version or "Unavailable"
+    identifiers.DeltaFingerprint = Delta.Fingerprint or "Unavailable"
+else
+    identifiers.DeltaID = "Unavailable"
+    identifiers.DeltaVersion = "Unavailable"
+    identifiers.DeltaFingerprint = "Unavailable"
+end
+
+-- 9. Session Information
+local HttpService = game:GetService("HttpService")
+identifiers.SessionID = safeCall(getsessionid) or HttpService:GenerateGUID(false)
+identifiers.JoinTime = os.time()
+
+-- 10. Roblox-Specific
+identifiers.RobloxVersion = safeCall(version) or "Unavailable"
+
+-- Print all available identifiers
+print("\n--- All Available Identifiers ---\n")
+for name, value in pairs(identifiers) do
+    if type(value) ~= "table" then
+        print(name .. ": " .. tostring(value))
+    end
+end
+
+-- Copy to clipboard
+local clipboardText = "--- Delta Executor Identifiers ---\n"
+for name, value in pairs(identifiers) do
+    if type(value) ~= "table" then
+        clipboardText = clipboardText .. name .. ": " .. tostring(value) .. "\n"
+    end
+end
+
+-- Safely copy to clipboard
+pcall(function()
+    setclipboard(clipboardText)
+    print("\nAll identifiers copied to clipboard!")
+end)
