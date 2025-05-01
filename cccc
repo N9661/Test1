@@ -1,0 +1,132 @@
+-- Create a table to store protection identifiers
+local protectionIDs = {}
+
+-- CRITICAL IDENTIFIERS (Most useful for whitelist systems)
+-- Hardware/Device Identifiers
+pcall(function() protectionIDs.HWID = getexecutorhwid() end)
+pcall(function() if gethwid and protectionIDs.HWID == nil then protectionIDs.HWID = gethwid() end end)
+pcall(function() if get_hwid and protectionIDs.HWID == nil then protectionIDs.HWID = get_hwid() end end)
+
+-- Roblox Identifiers
+protectionIDs.ClientID = game:GetService("RbxAnalyticsService"):GetClientId()
+protectionIDs.UserID = game:GetService("Players").LocalPlayer.UserId
+protectionIDs.PlayerName = game:GetService("Players").LocalPlayer.Name
+
+-- Executor Fingerprinting
+pcall(function() protectionIDs.ExecutorName = identifyexecutor() end)
+pcall(function() if syn then protectionIDs.SynapseFingerprint = syn.request({Url = "https://httpbin.org/get"}).Headers["Syn-Fingerprint"] end end)
+pcall(function() if Delta and Delta.Fingerprint then protectionIDs.DeltaFingerprint = Delta.Fingerprint end end)
+
+-- ADDITIONAL PROTECTION IDENTIFIERS
+-- Machine Identifiers
+pcall(function() if getcomputername then protectionIDs.ComputerName = getcomputername() end end)
+pcall(function() if getmacaddress then protectionIDs.MacAddress = getmacaddress() end end)
+pcall(function() if getdiskserial then protectionIDs.DiskSerial = getdiskserial() end end)
+pcall(function() if getmotherboardserial then protectionIDs.MotherboardSerial = getmotherboardserial() end end)
+pcall(function() if getcpuserial then protectionIDs.CPUSerial = getcpuserial() end end)
+
+-- Network Identifiers (careful with these)
+pcall(function() if getip then protectionIDs.IP = getip() end end)
+pcall(function() if getipv4 then protectionIDs.IPv4 = getipv4() end end)
+pcall(function() if getipv6 then protectionIDs.IPv6 = getipv6() end end)
+
+-- OS/Environment Identifiers
+pcall(function() if getosversion then protectionIDs.OSVersion = getosversion() end end)
+pcall(function() if getwindowskey then protectionIDs.WindowsKey = getwindowskey() end end)
+pcall(function() if getusername then protectionIDs.Username = getusername() end end)
+
+-- Roblox Environment
+pcall(function() if getrobloxversion then protectionIDs.RobloxVersion = getrobloxversion() end end)
+pcall(function() if version then protectionIDs.RobloxVersion = version() end end)
+protectionIDs.PlaceID = game.PlaceId
+protectionIDs.JobID = game.JobId
+
+-- Time-Based Protection
+protectionIDs.ExecutionTime = os.time()
+protectionIDs.TimeZone = os.date("%z")
+protectionIDs.DayOfWeek = os.date("%A")
+
+-- Account Security Metrics
+protectionIDs.AccountAge = game:GetService("Players").LocalPlayer.AccountAge
+pcall(function() 
+    protectionIDs.IsPremium = game:GetService("Players").LocalPlayer.MembershipType == Enum.MembershipType.Premium 
+end)
+
+-- ADVANCED PROTECTION TECHNIQUES
+-- Generate a unique hash combining multiple identifiers
+local function generateSecurityHash()
+    local hashBase = protectionIDs.ClientID .. "|" .. protectionIDs.UserID .. "|" .. (protectionIDs.HWID or "unknown")
+    
+    -- Simple hash function (you can replace with a more sophisticated one)
+    local hash = 0
+    for i = 1, #hashBase do
+        hash = ((hash << 5) - hash) + string.byte(hashBase, i)
+        hash = hash & hash -- Convert to 32bit integer
+    end
+    
+    return tostring(hash)
+end
+
+protectionIDs.SecurityHash = generateSecurityHash()
+
+-- Create a unique session token
+local function generateSessionToken()
+    local HttpService = game:GetService("HttpService")
+    return HttpService:GenerateGUID(false)
+end
+
+protectionIDs.SessionToken = generateSessionToken()
+
+-- PERSISTENT IDENTIFIER STORAGE
+-- Create a persistent identifier that remains the same across executions
+local function getPersistentID()
+    local filename = "whitelist_persistent_id.txt"
+    local HttpService = game:GetService("HttpService")
+    
+    -- Try to read existing ID
+    local success, existingID = pcall(function()
+        return readfile(filename)
+    end)
+    
+    -- If we already have an ID, return it
+    if success and existingID and #existingID > 10 then
+        return existingID
+    end
+    
+    -- Generate a new persistent ID
+    local newID = HttpService:GenerateGUID(false)
+    
+    -- Save the new ID
+    pcall(function()
+        writefile(filename, newID)
+    end)
+    
+    return newID
+end
+
+protectionIDs.PersistentID = getPersistentID()
+
+-- Print all protection identifiers
+print("\n--- Script Protection Identifiers ---\n")
+for name, value in pairs(protectionIDs) do
+    if type(value) == "string" or type(value) == "number" then
+        print(name .. ": " .. tostring(value))
+    end
+end
+
+-- Format for clipboard
+local clipboardText = "--- Script Protection Identifiers for Whitelist ---\n"
+for name, value in pairs(protectionIDs) do
+    if type(value) == "string" or type(value) == "number" then
+        clipboardText = clipboardText .. name .. ": " .. tostring(value) .. "\n"
+    end
+end
+
+-- Copy to clipboard
+pcall(function()
+    setclipboard(clipboardText)
+    print("\nProtection identifiers copied to clipboard!")
+end)
+
+-- Return the identifiers table (useful if you're requiring this script)
+return protectionIDs
