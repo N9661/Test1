@@ -1,154 +1,117 @@
--- Create a table to store protection identifiers
-local protectionIDs = {}
-
--- SAFE FUNCTION CALLER
--- This function safely calls any function that might not exist
-local function safecall(func, ...)
-    if type(func) == "function" then
-        local success, result = pcall(func, ...)
-        if success then
-            return result
+-- Create a function to generate the whitelist string in your custom format
+local function generateWhitelistString()
+    -- Safe function caller
+    local function safecall(func, ...)
+        if type(func) == "function" then
+            local success, result = pcall(func, ...)
+            if success then
+                return result
+            end
         end
-    end
-    return nil
-end
-
--- CRITICAL IDENTIFIERS (Most useful for whitelist systems)
--- These should work on most mobile executors
-
--- Roblox Identifiers (These are the most reliable across all platforms)
-protectionIDs.ClientID = game:GetService("RbxAnalyticsService"):GetClientId()
-protectionIDs.UserID = game:GetService("Players").LocalPlayer.UserId
-protectionIDs.PlayerName = game:GetService("Players").LocalPlayer.Name
-protectionIDs.DisplayName = game:GetService("Players").LocalPlayer.DisplayName
-protectionIDs.AccountAge = game:GetService("Players").LocalPlayer.AccountAge
-
--- Game Identifiers
-protectionIDs.PlaceID = game.PlaceId
-protectionIDs.GameID = game.GameId
-protectionIDs.JobID = game.JobId
-
--- Try to get HWID (with multiple fallbacks)
-local hwid = nil
-hwid = safecall(function() return getexecutorhwid() end)
-if not hwid then hwid = safecall(function() return gethwid() end) end
-if not hwid then hwid = safecall(function() return get_hwid() end) end
-if not hwid then hwid = safecall(function() return getexecutoridentifier() end) end
-if not hwid then hwid = safecall(function() return getidentifier() end) end
-
--- If all HWID methods fail, create a pseudo-HWID from available data
-if not hwid then
-    hwid = "MOBILE_" .. protectionIDs.ClientID:sub(1, 10) .. "_" .. tostring(protectionIDs.UserID)
-end
-protectionIDs.HWID = hwid
-
--- Try to get executor name
-local executorName = safecall(function() return identifyexecutor() end)
-if not executorName then executorName = safecall(function() return getexecutorname() end) end
-if not executorName then executorName = "MobileExecutor" end
-protectionIDs.ExecutorName = executorName
-
--- Time-Based Protection (works on all platforms)
-protectionIDs.ExecutionTime = os.time()
-protectionIDs.ExecutionDate = os.date("%Y-%m-%d")
-protectionIDs.ExecutionDay = os.date("%A")
-
--- Premium Status
-pcall(function() 
-    protectionIDs.IsPremium = game:GetService("Players").LocalPlayer.MembershipType == Enum.MembershipType.Premium 
-end)
-
--- Device Type Detection
-local UserInputService = game:GetService("UserInputService")
-protectionIDs.IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-protectionIDs.IsPC = UserInputService.KeyboardEnabled
-protectionIDs.IsTablet = UserInputService.TouchEnabled and UserInputService.KeyboardEnabled
-
--- ADVANCED PROTECTION TECHNIQUES
--- Generate a unique hash combining multiple identifiers
-local function generateSecurityHash()
-    local hashBase = protectionIDs.ClientID .. "|" .. tostring(protectionIDs.UserID) .. "|" .. protectionIDs.PlayerName
-    
-    -- Simple hash function
-    local hash = 0
-    for i = 1, #hashBase do
-        hash = ((hash * 31) + string.byte(hashBase, i)) % 2147483647
+        return nil
     end
     
-    return tostring(hash)
-end
-
-protectionIDs.SecurityHash = generateSecurityHash()
-
--- Create a unique session token
-local function generateSessionToken()
-    local HttpService = game:GetService("HttpService")
-    return HttpService:GenerateGUID(false)
-end
-
-protectionIDs.SessionToken = generateSessionToken()
-
--- Try to create a persistent identifier
-local function getPersistentID()
-    local HttpService = game:GetService("HttpService")
-    local filename = "whitelist_persistent_id.txt"
+    -- Get HWID with multiple fallbacks
+    local hwid = nil
+    hwid = safecall(function() return getexecutorhwid() end)
+    if not hwid then hwid = safecall(function() return gethwid() end) end
+    if not hwid then hwid = safecall(function() return get_hwid() end) end
+    if not hwid then hwid = safecall(function() return getexecutoridentifier() end) end
+    if not hwid then hwid = "UNKNOWN_HWID" end
     
-    -- Try to read existing ID
-    local existingID = nil
+    -- Get UserID
+    local userId = game:GetService("Players").LocalPlayer.UserId
+    
+    -- Create a persistent ID
+    local function getPersistentID()
+        local HttpService = game:GetService("HttpService")
+        local filename = "lurnai_persistent_id.txt"
+        
+        -- Try to read existing ID
+        local existingID = nil
+        pcall(function()
+            if readfile then
+                existingID = readfile(filename)
+            end
+        end)
+        
+        -- If we already have an ID, return it
+        if existingID and #existingID > 10 then
+            return existingID
+        end
+        
+        -- Generate a new persistent ID
+        local newID = HttpService:GenerateGUID(false)
+        
+        -- Try to save the new ID
+        pcall(function()
+            if writefile then
+                writefile(filename, newID)
+            end
+        end)
+        
+        return newID
+    end
+    
+    local persistentID = getPersistentID()
+    
+    -- Get PlaceID
+    local placeID = game.PlaceId
+    
+    -- Get ClientID
+    local clientID = game:GetService("RbxAnalyticsService"):GetClientId()
+    
+    -- Determine platform (PC or Mobile)
+    local UserInputService = game:GetService("UserInputService")
+    local isPc = UserInputService.KeyboardEnabled and 500 or 0
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and 1000 or 0
+    
+    -- Get PlayerName
+    local playerName = game:GetService("Players").LocalPlayer.Name
+    
+    -- Get ExecutorName
+    local executorName = "Unknown"
     pcall(function()
-        if readfile then
-            existingID = readfile(filename)
-        end
+        if identifyexecutor then executorName = identifyexecutor() end
+        if executorName == "Unknown" and getexecutorname then executorName = getexecutorname() end
     end)
     
-    -- If we already have an ID, return it
-    if existingID and #existingID > 10 then
-        return existingID
-    end
+    -- Format the whitelist string according to your specification
+    local whitelistString = string.format(
+        "Lurnai_%s_%s_%s_%s_%s_%s_%s_%s_%s_Lurnai",
+        tostring(hwid),
+        tostring(userId),
+        tostring(persistentID),
+        tostring(placeID),
+        tostring(clientID),
+        tostring(isPc),
+        tostring(isMobile),
+        tostring(playerName),
+        tostring(executorName)
+    )
     
-    -- Generate a new persistent ID
-    local newID = HttpService:GenerateGUID(false)
-    
-    -- Try to save the new ID
-    pcall(function()
-        if writefile then
-            writefile(filename, newID)
-        end
-    end)
-    
-    return newID
+    return whitelistString
 end
 
-protectionIDs.PersistentID = getPersistentID()
+-- Generate the whitelist string
+local whitelistString = generateWhitelistString()
 
--- Print all protection identifiers
-print("\n--- Script Protection Identifiers (Mobile Compatible) ---\n")
-for name, value in pairs(protectionIDs) do
-    if type(value) == "string" or type(value) == "number" or type(value) == "boolean" then
-        print(name .. ": " .. tostring(value))
-    end
-end
+-- Print the result
+print("Whitelist String:")
+print(whitelistString)
 
--- Format for clipboard
-local clipboardText = "--- Script Protection Identifiers for Whitelist ---\n"
-for name, value in pairs(protectionIDs) do
-    if type(value) == "string" or type(value) == "number" or type(value) == "boolean" then
-        clipboardText = clipboardText .. name .. ": " .. tostring(value) .. "\n"
-    end
-end
-
--- Copy to clipboard (safely)
+-- Copy to clipboard
 pcall(function()
     if setclipboard then
-        setclipboard(clipboardText)
-        print("\nProtection identifiers copied to clipboard!")
+        setclipboard(whitelistString)
+        print("Whitelist string copied to clipboard!")
     elseif writeclipboard then
-        writeclipboard(clipboardText)
-        print("\nProtection identifiers copied to clipboard!")
+        writeclipboard(whitelistString)
+        print("Whitelist string copied to clipboard!")
     else
-        print("\nClipboard function not available. Please manually copy the information above.")
+        print("Clipboard function not available. Please manually copy the string above.")
     end
 end)
 
--- Return the identifiers table (useful if you're requiring this script)
-return protectionIDs
+-- Return the string (useful if requiring this script)
+return whitelistString
