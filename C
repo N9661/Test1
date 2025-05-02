@@ -1,166 +1,207 @@
--- Create an obfuscated whitelist string generator
-local function generateObfuscatedWhitelist()
-    -- Safe function caller
+-- Advanced custom obfuscation for whitelist system
+local function generateSecureWhitelist()
+    -- Get identifiers
     local function safecall(func, ...)
         if type(func) == "function" then
             local success, result = pcall(func, ...)
-            if success then
-                return result
-            end
+            if success then return result end
         end
         return nil
     end
     
-    -- Get identifiers
-    local hwid = safecall(function() return getexecutorhwid() end) or 
-                 safecall(function() return gethwid() end) or 
-                 safecall(function() return get_hwid() end) or 
-                 "UNKNOWN"
+    -- Collect user data
+    local userData = {
+        hwid = safecall(function() return getexecutorhwid() end) or 
+               safecall(function() return gethwid() end) or 
+               "UNKNOWN",
+        userId = game:GetService("Players").LocalPlayer.UserId,
+        persistentId = (function()
+            local filename = "secure_id.bin"
+            local existingID = nil
+            pcall(function() if readfile then existingID = readfile(filename) end end)
+            if existingID and #existingID > 10 then return existingID end
+            local newID = game:GetService("HttpService"):GenerateGUID(false)
+            pcall(function() if writefile then writefile(filename, newID) end end)
+            return newID
+        end)(),
+        placeId = game.PlaceId,
+        clientId = game:GetService("RbxAnalyticsService"):GetClientId(),
+        isPc = game:GetService("UserInputService").KeyboardEnabled and 500 or 0,
+        isMobile = game:GetService("UserInputService").TouchEnabled and 
+                  not game:GetService("UserInputService").KeyboardEnabled and 1000 or 0,
+        playerName = game:GetService("Players").LocalPlayer.Name,
+        executorName = safecall(function() return identifyexecutor() end) or "Unknown",
+        timestamp = os.time()
+    }
     
-    local userId = game:GetService("Players").LocalPlayer.UserId
+    -- ADVANCED CUSTOM OBFUSCATION TECHNIQUES
     
-    -- Create a persistent ID
-    local function getPersistentID()
-        local HttpService = game:GetService("HttpService")
-        local filename = "x_persistent.dat"
-        
-        local existingID = nil
-        pcall(function()
-            if readfile then existingID = readfile(filename) end
-        end)
-        
-        if existingID and #existingID > 10 then
-            return existingID
+    -- 1. Create a custom encryption key based on user data
+    local function createEncryptionKey()
+        local base = tostring(userData.userId) .. tostring(userData.placeId)
+        local key = 0
+        for i = 1, #base do
+            key = (key * 17 + string.byte(base, i)) % 256
         end
-        
-        local newID = HttpService:GenerateGUID(false)
-        pcall(function()
-            if writefile then writefile(filename, newID) end
-        end)
-        
-        return newID
+        return key
     end
     
-    local persistentID = getPersistentID()
-    local placeID = game.PlaceId
-    local clientID = game:GetService("RbxAnalyticsService"):GetClientId()
+    local encryptionKey = createEncryptionKey()
     
-    -- Determine platform with numeric codes
-    local UserInputService = game:GetService("UserInputService")
-    local isPc = UserInputService.KeyboardEnabled and 500 or 0
-    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and 1000 or 0
-    
-    local playerName = game:GetService("Players").LocalPlayer.Name
-    local executorName = safecall(function() return identifyexecutor() end) or 
-                         safecall(function() return getexecutorname() end) or 
-                         "Unknown"
-    
-    -- OBFUSCATION TECHNIQUES
-    
-    -- 1. Encode numbers to custom base (makes numbers harder to recognize)
-    local function encodeNumber(num)
-        if not num or type(num) ~= "number" then return "X" end
-        
-        local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    -- 2. Custom byte-level encryption
+    local function encryptValue(value, salt)
+        salt = salt or 0
         local result = ""
-        local n = math.abs(num)
+        local valueStr = tostring(value)
         
-        while n > 0 do
-            local remainder = n % 64
-            result = string.sub(chars, remainder + 1, remainder + 1) .. result
-            n = math.floor(n / 64)
+        for i = 1, #valueStr do
+            local byte = string.byte(valueStr, i)
+            local encrypted = (byte * 13 + encryptionKey + salt * 7) % 256
+            result = result .. string.char(encrypted)
         end
         
-        return (num < 0 and "-" or "") .. (result ~= "" and result or "A")
-    end
-    
-    -- 2. Encode strings to custom format
-    local function encodeString(str)
-        if not str or type(str) ~= "string" then return "X" end
-        
-        local result = ""
-        for i = 1, #str do
-            local byte = string.byte(str, i)
-            result = result .. string.char(((byte + 7) % 126) + 33)
-        end
         return result
     end
     
-    -- 3. Shuffle the order of components (makes it harder to know what each position means)
-    local components = {
-        "A" .. encodeString(hwid),                -- HWID (A prefix)
-        "B" .. encodeNumber(userId),              -- UserID (B prefix)
-        "C" .. encodeString(persistentID),        -- PersistentID (C prefix)
-        "D" .. encodeNumber(placeID),             -- PlaceID (D prefix)
-        "E" .. encodeString(clientID),            -- ClientID (E prefix)
-        "F" .. encodeNumber(isPc),                -- PC (F prefix)
-        "G" .. encodeNumber(isMobile),            -- Mobile (G prefix)
-        "H" .. encodeString(playerName),          -- PlayerName (H prefix)
-        "I" .. encodeString(executorName)         -- ExecutorName (I prefix)
-    }
-    
-    -- 4. Add a timestamp as an additional component
-    table.insert(components, "J" .. encodeNumber(os.time()))
-    
-    -- 5. Add a random component to further obfuscate
-    local HttpService = game:GetService("HttpService")
-    table.insert(components, "K" .. encodeString(HttpService:GenerateGUID(false)))
-    
-    -- 6. Shuffle the components (except for a verification component we'll add)
-    for i = #components, 2, -1 do
-        local j = math.random(1, i)
-        components[i], components[j] = components[j], components[i]
+    -- 3. Convert to custom base encoding (not standard base64)
+    local function toCustomBase(str)
+        local result = ""
+        -- Custom character set (not standard base64)
+        local chars = "!@#$%^&*()_+-=[]{}|;:,.<>?/~`0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        
+        for i = 1, #str do
+            local byte = string.byte(str, i)
+            -- Map each byte to our custom character set
+            local index = (byte % #chars) + 1
+            result = result .. string.sub(chars, index, index)
+        end
+        
+        return result
     end
     
-    -- 7. Add a verification hash based on all components
-    local verificationBase = ""
-    for _, component in ipairs(components) do
-        verificationBase = verificationBase .. component
+    -- 4. Create a verification code based on all data
+    local function createVerificationCode()
+        local combined = ""
+        for k, v in pairs(userData) do
+            combined = combined .. tostring(k) .. tostring(v)
+        end
+        
+        local code = 0
+        for i = 1, #combined do
+            code = (code * 31 + string.byte(combined, i)) % 1000000
+        end
+        
+        return code
     end
     
-    local verificationHash = 0
-    for i = 1, #verificationBase do
-        verificationHash = (verificationHash * 31 + string.byte(verificationBase, i)) % 1000000
+    -- 5. Encrypt and encode each piece of data with different salts
+    local encryptedData = {}
+    local salts = {}
+    
+    for k, v in pairs(userData) do
+        -- Generate a random salt for each field
+        local salt = math.random(1, 100)
+        salts[k] = salt
+        
+        -- Encrypt and encode the value
+        encryptedData[k] = toCustomBase(encryptValue(v, salt))
     end
     
-    table.insert(components, "V" .. encodeNumber(verificationHash))
+    -- 6. Add the verification code
+    encryptedData.verification = toCustomBase(encryptValue(createVerificationCode(), 50))
     
-    -- 8. Join with a random delimiter
-    local delimiters = {".", "-", "_", ":", "~", "+"}
-    local delimiter = delimiters[math.random(1, #delimiters)]
+    -- 7. Add random decoy fields
+    local decoyNames = {"system", "config", "version", "build", "device", "session", "auth"}
+    for i = 1, 3 do
+        local decoyName = decoyNames[math.random(1, #decoyNames)]
+        local decoyValue = toCustomBase(encryptValue(math.random(1000, 9999), math.random(1, 100)))
+        encryptedData[decoyName] = decoyValue
+    end
     
-    -- 9. Add version identifier and wrap with a random prefix/suffix
-    local prefixes = {"X", "Y", "Z", "W"}
-    local suffixes = {"x", "y", "z", "w"}
+    -- 8. Create a custom structure that hides the meaning of each field
+    local function scrambleFieldNames()
+        local scrambled = {}
+        local fieldMap = {}
+        
+        -- Create a mapping of real field names to scrambled names
+        for field in pairs(encryptedData) do
+            local scrambledName = ""
+            for i = 1, 5 do
+                scrambledName = scrambledName .. string.char(math.random(97, 122)) -- random lowercase letter
+            end
+            fieldMap[field] = scrambledName
+            scrambled[scrambledName] = encryptedData[field]
+        end
+        
+        -- Add the field map itself in an encrypted form
+        local fieldMapStr = game:GetService("HttpService"):JSONEncode(fieldMap)
+        scrambled.map = toCustomBase(encryptValue(fieldMapStr, 99))
+        
+        return scrambled
+    end
     
-    local prefix = prefixes[math.random(1, #prefixes)]
-    local suffix = suffixes[math.random(1, #suffixes)]
-    local version = "1" -- Version of your obfuscation scheme
+    local scrambledData = scrambleFieldNames()
     
-    local finalString = prefix .. version .. delimiter .. table.concat(components, delimiter) .. delimiter .. suffix
+    -- 9. Add a timestamp and version marker
+    scrambledData.t = toCustomBase(encryptValue(os.time(), 42))
+    scrambledData.v = toCustomBase(encryptValue("2.1", 33)) -- Version of obfuscation
     
-    return finalString
+    -- 10. Convert the final structure to a compact string format
+    local function convertToCompactString(data)
+        local parts = {}
+        
+        -- Add a random prefix
+        local prefix = ""
+        for i = 1, 3 do
+            prefix = prefix .. string.char(math.random(65, 90)) -- random uppercase letter
+        end
+        
+        -- Convert each field to a string part
+        for k, v in pairs(data) do
+            table.insert(parts, k .. ":" .. v)
+        end
+        
+        -- Shuffle the parts
+        for i = #parts, 2, -1 do
+            local j = math.random(1, i)
+            parts[i], parts[j] = parts[j], parts[i]
+        end
+        
+        -- Join with a random separator
+        local separators = {".", "-", "~", "*", "^", "%"}
+        local separator = separators[math.random(1, #separators)]
+        
+        -- Add a random suffix
+        local suffix = ""
+        for i = 1, 3 do
+            suffix = suffix .. string.char(math.random(65, 90)) -- random uppercase letter
+        end
+        
+        return prefix .. separator .. table.concat(parts, separator) .. separator .. suffix
+    end
+    
+    return convertToCompactString(scrambledData)
 end
 
--- Generate the obfuscated whitelist string
-local obfuscatedWhitelist = generateObfuscatedWhitelist()
+-- Generate the secure whitelist string
+local secureWhitelist = generateSecureWhitelist()
 
 -- Print the result
-print("Obfuscated Whitelist String:")
-print(obfuscatedWhitelist)
+print("Secure Whitelist String:")
+print(secureWhitelist)
 
 -- Copy to clipboard
 pcall(function()
     if setclipboard then
-        setclipboard(obfuscatedWhitelist)
-        print("Obfuscated whitelist string copied to clipboard!")
+        setclipboard(secureWhitelist)
+        print("Secure whitelist string copied to clipboard!")
     elseif writeclipboard then
-        writeclipboard(obfuscatedWhitelist)
-        print("Obfuscated whitelist string copied to clipboard!")
+        writeclipboard(secureWhitelist)
+        print("Secure whitelist string copied to clipboard!")
     else
         print("Clipboard function not available. Please manually copy the string above.")
     end
 end)
 
 -- Return the string
-return obfuscatedWhitelist
+return secureWhitelist
